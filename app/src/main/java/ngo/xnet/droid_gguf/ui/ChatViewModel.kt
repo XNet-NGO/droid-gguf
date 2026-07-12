@@ -1,6 +1,8 @@
 package ngo.xnet.droid_gguf.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,7 +23,9 @@ data class ModelConfig(
     val nThreads: Int = 4,
 )
 
-class ChatViewModel : ViewModel() {
+class ChatViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val prefs = application.getSharedPreferences("droid_gguf", Context.MODE_PRIVATE)
 
     val cpuEngine = LlamaEngine()
     val gpuEngine = LlamaEngine()
@@ -37,6 +41,11 @@ class ChatViewModel : ViewModel() {
     var gpuModelName: String = ""
         private set
 
+    var cpuModelPath: String? = null
+        private set
+    var gpuModelPath: String? = null
+        private set
+
     var cpuConfig = MutableStateFlow(ModelConfig())
     var gpuConfig = MutableStateFlow(ModelConfig())
 
@@ -49,21 +58,71 @@ class ChatViewModel : ViewModel() {
     private var stopRequested = false
     private var loopJob: Job? = null
 
+    init {
+        restoreState()
+    }
+
+    private fun restoreState() {
+        val cpu = prefs.getString("cpu_model_path", null)
+        val gpu = prefs.getString("gpu_model_path", null)
+        cpuConfig.value = ModelConfig(
+            temperature = prefs.getFloat("cpu_temp", 0.8f),
+            topP = prefs.getFloat("cpu_topp", 0.95f),
+            topK = prefs.getInt("cpu_topk", 40),
+            maxTokens = prefs.getInt("cpu_max_tokens", 512),
+            contextSize = prefs.getInt("cpu_context", 4096),
+            nThreads = prefs.getInt("cpu_threads", 4),
+        )
+        gpuConfig.value = ModelConfig(
+            temperature = prefs.getFloat("gpu_temp", 0.8f),
+            topP = prefs.getFloat("gpu_topp", 0.95f),
+            topK = prefs.getInt("gpu_topk", 40),
+            maxTokens = prefs.getInt("gpu_max_tokens", 512),
+            contextSize = prefs.getInt("gpu_context", 4096),
+            nThreads = prefs.getInt("gpu_threads", 4),
+        )
+        if (cpu != null && java.io.File(cpu).exists()) loadCpuModel(cpu)
+        if (gpu != null && java.io.File(gpu).exists()) loadGpuModel(gpu)
+    }
+
+    fun saveState() {
+        prefs.edit()
+            .putString("cpu_model_path", cpuModelPath)
+            .putString("gpu_model_path", gpuModelPath)
+            .putFloat("cpu_temp", cpuConfig.value.temperature)
+            .putFloat("cpu_topp", cpuConfig.value.topP)
+            .putInt("cpu_topk", cpuConfig.value.topK)
+            .putInt("cpu_max_tokens", cpuConfig.value.maxTokens)
+            .putInt("cpu_context", cpuConfig.value.contextSize)
+            .putInt("cpu_threads", cpuConfig.value.nThreads)
+            .putFloat("gpu_temp", gpuConfig.value.temperature)
+            .putFloat("gpu_topp", gpuConfig.value.topP)
+            .putInt("gpu_topk", gpuConfig.value.topK)
+            .putInt("gpu_max_tokens", gpuConfig.value.maxTokens)
+            .putInt("gpu_context", gpuConfig.value.contextSize)
+            .putInt("gpu_threads", gpuConfig.value.nThreads)
+            .apply()
+    }
+
     fun loadCpuModel(path: String) {
+        cpuModelPath = path
         cpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
         _cpuLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
             val success = cpuEngine.loadModel(path, contextSize = cpuConfig.value.contextSize, nThreads = cpuConfig.value.nThreads, useGpu = false)
             _cpuLoaded.value = success
+            saveState()
         }
     }
 
     fun loadGpuModel(path: String) {
+        gpuModelPath = path
         gpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
         _gpuLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
             val success = gpuEngine.loadModel(path, contextSize = gpuConfig.value.contextSize, nThreads = gpuConfig.value.nThreads, useGpu = true)
             _gpuLoaded.value = success
+            saveState()
         }
     }
 
