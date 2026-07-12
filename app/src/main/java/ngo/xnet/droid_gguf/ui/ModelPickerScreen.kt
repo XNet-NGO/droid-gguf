@@ -87,6 +87,7 @@ fun ModelPickerScreen(
                 cpuModelPath = path
                 cpuModelName = name
                 cpuModelSize = size
+                viewModel.loadCpuModel(path)
                 cpuState = ModelLoadState.READY
             }
         }
@@ -99,6 +100,7 @@ fun ModelPickerScreen(
                 gpuModelPath = path
                 gpuModelName = name
                 gpuModelSize = size
+                viewModel.loadGpuModel(path)
                 gpuState = ModelLoadState.READY
             }
         }

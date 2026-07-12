@@ -40,21 +40,30 @@ class ChatViewModel : ViewModel() {
     var cpuConfig = MutableStateFlow(ModelConfig())
     var gpuConfig = MutableStateFlow(ModelConfig())
 
+    private val _cpuLoaded = MutableStateFlow(false)
+    val cpuLoaded: StateFlow<Boolean> = _cpuLoaded.asStateFlow()
+    private val _gpuLoaded = MutableStateFlow(false)
+    val gpuLoaded: StateFlow<Boolean> = _gpuLoaded.asStateFlow()
+
     @Volatile
     private var stopRequested = false
     private var loopJob: Job? = null
 
     fun loadCpuModel(path: String) {
         cpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
+        _cpuLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
-            cpuEngine.loadModel(path, contextSize = cpuConfig.value.contextSize, nThreads = cpuConfig.value.nThreads, useGpu = false)
+            val success = cpuEngine.loadModel(path, contextSize = cpuConfig.value.contextSize, nThreads = cpuConfig.value.nThreads, useGpu = false)
+            _cpuLoaded.value = success
         }
     }
 
     fun loadGpuModel(path: String) {
         gpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
+        _gpuLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
-            gpuEngine.loadModel(path, contextSize = gpuConfig.value.contextSize, nThreads = gpuConfig.value.nThreads, useGpu = true)
+            val success = gpuEngine.loadModel(path, contextSize = gpuConfig.value.contextSize, nThreads = gpuConfig.value.nThreads, useGpu = true)
+            _gpuLoaded.value = success
         }
     }
 

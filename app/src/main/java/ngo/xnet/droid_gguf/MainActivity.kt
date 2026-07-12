@@ -50,9 +50,8 @@ fun DroidGgufApp() {
         composable("picker") {
             ModelPickerScreen(
                 viewModel = viewModel,
-                onModelsSelected = { cpuPath, gpuPath ->
-                    viewModel.loadCpuModel(cpuPath)
-                    viewModel.loadGpuModel(gpuPath)
+                onModelsSelected = { _, _ ->
+                    // Models already loaded from picker - just navigate
                     navController.navigate("chat")
                 }
             )
