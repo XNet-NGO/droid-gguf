@@ -35,6 +35,16 @@ set(GGML_OPENCL_EMBED_KERNELS ON CACHE BOOL "" FORCE)
 set(GGML_OPENMP    ON  CACHE BOOL "" FORCE)
 set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
 
+# CPU optimization: ARM NEON + dot product + fp16 + i8mm
+set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16+i8mm" CACHE STRING "" FORCE)
+
+# Performance flags
+set(GGML_FLASH_ATTN ON CACHE BOOL "" FORCE)
+
+# Compiler optimization flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
+
 # Disable backends we don't need
 set(GGML_VULKAN    OFF CACHE BOOL "" FORCE)
 set(GGML_METAL     OFF CACHE BOOL "" FORCE)
