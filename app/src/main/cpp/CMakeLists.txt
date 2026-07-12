@@ -39,15 +39,12 @@ set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16+i8mm" CACHE STRING "" FORCE)
 
 # Performance flags
-set(GGML_FLASH_ATTN ON CACHE BOOL "" FORCE)
+set(GGML_FLASH_ATTN OFF CACHE BOOL "" FORCE)
 
 # KleidiAI - disable for now (may conflict with this llama.cpp version)
 set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
 
-# Memory-mapped model loading (faster startup, less RAM copy)
-set(LLAMA_MMAP ON CACHE BOOL "" FORCE)
-
-# Compiler optimization flags (no -mcpu to avoid little core issues)
+# Compiler optimization flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
 
