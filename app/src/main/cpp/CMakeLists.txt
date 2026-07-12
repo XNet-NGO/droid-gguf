@@ -11,6 +11,12 @@ set(LLAMA_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # =============================================================================
+# Python3 — needed by GGML_OPENCL_EMBED_KERNELS to run embed_kernel.py
+# =============================================================================
+set(Python3_EXECUTABLE "/usr/bin/python3")
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+# =============================================================================
 # llama.cpp build options: single static build with CPU + OpenCL backends
 # =============================================================================
 
@@ -24,8 +30,8 @@ set(LLAMA_BUILD_APP      OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
 
 # GGML backend options
-set(GGML_OPENCL    OFF CACHE BOOL "" FORCE)
-set(GGML_OPENCL_EMBED_KERNELS OFF CACHE BOOL "" FORCE)
+set(GGML_OPENCL    ON  CACHE BOOL "" FORCE)
+set(GGML_OPENCL_EMBED_KERNELS ON CACHE BOOL "" FORCE)
 set(GGML_OPENMP    ON  CACHE BOOL "" FORCE)
 set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
 
@@ -51,7 +57,6 @@ target_include_directories(droid-gguf PRIVATE
 )
 
 # Link against the llama static library (which transitively links ggml backends)
-# Also explicitly link OpenCL stub for the final .so (device provides real one)
 target_link_libraries(droid-gguf PRIVATE
     llama
     log

@@ -49,6 +49,7 @@ fun DroidGgufApp() {
     NavHost(navController = navController, startDestination = "picker") {
         composable("picker") {
             ModelPickerScreen(
+                viewModel = viewModel,
                 onModelsSelected = { cpuPath, gpuPath ->
                     viewModel.loadCpuModel(cpuPath)
                     viewModel.loadGpuModel(gpuPath)

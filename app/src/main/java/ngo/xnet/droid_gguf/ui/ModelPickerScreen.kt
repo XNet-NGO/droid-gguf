@@ -3,11 +3,17 @@ package ngo.xnet.droid_gguf.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,12 +29,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 enum class ModelLoadState { EMPTY, LOADING, READY }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelPickerScreen(
+    viewModel: ChatViewModel,
     onModelsSelected: (cpuModelPath: String, gpuModelPath: String) -> Unit
 ) {
     val context = LocalContext.current
@@ -42,6 +50,9 @@ fun ModelPickerScreen(
     var gpuModelName by remember { mutableStateOf<String?>(null) }
     var cpuModelSize by remember { mutableStateOf<String?>(null) }
     var gpuModelSize by remember { mutableStateOf<String?>(null) }
+
+    val cpuConfig by viewModel.cpuConfig.collectAsState()
+    val gpuConfig by viewModel.gpuConfig.collectAsState()
 
     fun importModel(uri: Uri, onDone: (path: String, name: String, size: String) -> Unit) {
         scope.launch {
@@ -93,6 +104,8 @@ fun ModelPickerScreen(
         }
     }
 
+    val bothReady = cpuState == ModelLoadState.READY && gpuState == ModelLoadState.READY
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -107,7 +120,8 @@ fun ModelPickerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -134,11 +148,38 @@ fun ModelPickerScreen(
                 onClick = { gpuPicker.launch(arrayOf("*/*")) }
             )
 
+            // Config section - shown after both models are loaded
+            if (bothReady) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    "Generation Settings",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // CPU Config Section
+                ConfigSection(
+                    title = "CPU Model Settings",
+                    config = cpuConfig,
+                    showThreads = true,
+                    onConfigChanged = { viewModel.cpuConfig.value = it }
+                )
+
+                // GPU Config Section
+                ConfigSection(
+                    title = "GPU Model Settings",
+                    config = gpuConfig,
+                    showThreads = false,
+                    onConfigChanged = { viewModel.gpuConfig.value = it }
+                )
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
                 onClick = { onModelsSelected(cpuModelPath!!, gpuModelPath!!) },
-                enabled = cpuState == ModelLoadState.READY && gpuState == ModelLoadState.READY,
+                enabled = bothReady,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -148,6 +189,205 @@ fun ModelPickerScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ConfigSection(
+    title: String,
+    config: ModelConfig,
+    showThreads: Boolean,
+    onConfigChanged: (ModelConfig) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header - clickable to expand/collapse
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Collapse" else "Expand"
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Temperature slider (0.0 to 2.0, step 0.1)
+                    LabeledSlider(
+                        label = "Temperature",
+                        value = config.temperature,
+                        valueRange = 0f..2f,
+                        steps = 19, // (2.0 - 0.0) / 0.1 - 1 = 19 steps between
+                        valueDisplay = { String.format("%.1f", it) },
+                        onValueChange = { onConfigChanged(config.copy(temperature = roundToStep(it, 0.1f))) }
+                    )
+
+                    // Top-P slider (0.0 to 1.0, step 0.05)
+                    LabeledSlider(
+                        label = "Top-P",
+                        value = config.topP,
+                        valueRange = 0f..1f,
+                        steps = 19, // (1.0 - 0.0) / 0.05 - 1 = 19 steps between
+                        valueDisplay = { String.format("%.2f", it) },
+                        onValueChange = { onConfigChanged(config.copy(topP = roundToStep(it, 0.05f))) }
+                    )
+
+                    // Top-K slider (1 to 100, step 1)
+                    LabeledSlider(
+                        label = "Top-K",
+                        value = config.topK.toFloat(),
+                        valueRange = 1f..100f,
+                        steps = 98, // (100 - 1) / 1 - 1 = 98 steps between
+                        valueDisplay = { it.roundToInt().toString() },
+                        onValueChange = { onConfigChanged(config.copy(topK = it.roundToInt())) }
+                    )
+
+                    // Max Tokens slider (64 to 2048, step 64)
+                    LabeledSlider(
+                        label = "Max Tokens",
+                        value = config.maxTokens.toFloat(),
+                        valueRange = 64f..2048f,
+                        steps = 30, // (2048 - 64) / 64 - 1 = 30 steps between
+                        valueDisplay = { it.roundToInt().toString() },
+                        onValueChange = { onConfigChanged(config.copy(maxTokens = roundToIntStep(it, 64))) }
+                    )
+
+                    // Context Size dropdown (1024, 2048, 4096, 8192)
+                    ContextSizeSelector(
+                        currentSize = config.contextSize,
+                        onSizeSelected = { onConfigChanged(config.copy(contextSize = it)) }
+                    )
+
+                    // Threads slider (1 to 8, step 1) - CPU only
+                    if (showThreads) {
+                        LabeledSlider(
+                            label = "Threads",
+                            value = config.nThreads.toFloat(),
+                            valueRange = 1f..8f,
+                            steps = 6, // (8 - 1) / 1 - 1 = 6 steps between
+                            valueDisplay = { it.roundToInt().toString() },
+                            onValueChange = { onConfigChanged(config.copy(nThreads = it.roundToInt())) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabeledSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    valueDisplay: (Float) -> String,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                valueDisplay(value),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = steps,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ContextSizeSelector(
+    currentSize: Int,
+    onSizeSelected: (Int) -> Unit
+) {
+    val options = listOf(1024, 2048, 4096, 8192)
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "Context Size",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = "$currentSize tokens",
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                colors = OutlinedTextFieldDefaults.colors()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                options.forEach { size ->
+                    DropdownMenuItem(
+                        text = { Text("$size tokens") },
+                        onClick = {
+                            onSizeSelected(size)
+                            expanded = false
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun roundToStep(value: Float, step: Float): Float {
+    return (value / step).roundToInt() * step
+}
+
+private fun roundToIntStep(value: Float, step: Int): Int {
+    return ((value / step).roundToInt() * step).coerceIn(step, Int.MAX_VALUE)
 }
 
 @Composable

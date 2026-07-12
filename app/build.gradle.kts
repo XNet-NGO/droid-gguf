@@ -57,6 +57,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        jniLibs {
+            // Exclude the OpenCL stub — the real libOpenCL.so is provided by the device vendor
+            excludes += "**/libOpenCL.so"
+        }
+    }
 }
 
 dependencies {
