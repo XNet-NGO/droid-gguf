@@ -235,6 +235,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = _messages.value + message
     }
 
+    fun clearMessages() {
+        stopLoop()
+        _messages.value = emptyList()
+    }
+
     /** Wrap prompt in ChatML format so the model responds conversationally */
     private fun buildChatPrompt(prompt: String, respondingAs: MessageRole): String {
         val sb = StringBuilder()
