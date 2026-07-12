@@ -21,6 +21,7 @@ data class ModelConfig(
     val maxTokens: Int = 512,
     val contextSize: Int = 4096,
     val nThreads: Int = 6,
+    val systemPrompt: String = "/no_think\nYou are a helpful assistant. Respond concisely.",
 )
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -71,7 +72,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             topK = prefs.getInt("cpu_topk", 40),
             maxTokens = prefs.getInt("cpu_max_tokens", 512),
             contextSize = prefs.getInt("cpu_context", 4096),
-            nThreads = prefs.getInt("cpu_threads", 4),
+            nThreads = prefs.getInt("cpu_threads", 6),
+            systemPrompt = prefs.getString("cpu_system_prompt", "/no_think\nYou are a helpful assistant. Respond concisely.") ?: "",
         )
         gpuConfig.value = ModelConfig(
             temperature = prefs.getFloat("gpu_temp", 0.8f),
@@ -79,7 +81,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             topK = prefs.getInt("gpu_topk", 40),
             maxTokens = prefs.getInt("gpu_max_tokens", 512),
             contextSize = prefs.getInt("gpu_context", 4096),
-            nThreads = prefs.getInt("gpu_threads", 4),
+            nThreads = prefs.getInt("gpu_threads", 6),
+            systemPrompt = prefs.getString("gpu_system_prompt", "/no_think\nYou are a helpful assistant. Respond concisely.") ?: "",
         )
         if (cpu != null && java.io.File(cpu).exists()) loadCpuModel(cpu)
         if (gpu != null && java.io.File(gpu).exists()) loadGpuModel(gpu)
@@ -95,12 +98,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             .putInt("cpu_max_tokens", cpuConfig.value.maxTokens)
             .putInt("cpu_context", cpuConfig.value.contextSize)
             .putInt("cpu_threads", cpuConfig.value.nThreads)
+            .putString("cpu_system_prompt", cpuConfig.value.systemPrompt)
             .putFloat("gpu_temp", gpuConfig.value.temperature)
             .putFloat("gpu_topp", gpuConfig.value.topP)
             .putInt("gpu_topk", gpuConfig.value.topK)
             .putInt("gpu_max_tokens", gpuConfig.value.maxTokens)
             .putInt("gpu_context", gpuConfig.value.contextSize)
             .putInt("gpu_threads", gpuConfig.value.nThreads)
+            .putString("gpu_system_prompt", gpuConfig.value.systemPrompt)
             .apply()
     }
 
@@ -244,7 +249,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Wrap prompt in ChatML format so the model responds conversationally */
     private fun buildChatPrompt(prompt: String, respondingAs: MessageRole): String {
-        return "<|im_start|>system\n/no_think<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+        val config = when (respondingAs) {
+            MessageRole.CPU -> cpuConfig.value
+            MessageRole.GPU -> gpuConfig.value
+            else -> cpuConfig.value
+        }
+        val sys = config.systemPrompt
+        return if (sys.isNotBlank()) {
+            "<|im_start|>system\n$sys<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+        } else {
+            "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+        }
     }
 
 

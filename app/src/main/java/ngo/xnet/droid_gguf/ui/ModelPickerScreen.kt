@@ -294,6 +294,17 @@ private fun ConfigSection(
                             onValueChange = { onConfigChanged(config.copy(nThreads = it.roundToInt())) }
                         )
                     }
+
+                    // System Prompt
+                    Text("System Prompt", style = MaterialTheme.typography.labelMedium)
+                    OutlinedTextField(
+                        value = config.systemPrompt,
+                        onValueChange = { onConfigChanged(config.copy(systemPrompt = it)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 5,
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
