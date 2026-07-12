@@ -150,7 +150,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     else -> break
                 }
 
-                // Wrap in ChatML format so the model responds to the prompt
+                // Apply chat template
                 val formattedPrompt = buildChatPrompt(currentPrompt, nextRole)
 
                 val config = when (nextRole) {
@@ -174,10 +174,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         topP = config.topP,
                         callback = object : LlamaEngine.StreamCallback {
                             override fun onToken(token: String): Boolean {
-                                // Stop on end-of-turn tokens
-                                if (token.contains("<|im_end|>") || token.contains("<|endoftext|>") || token.contains("<|im_start|>")) {
-                                    return false
-                                }
                                 responseBuilder.append(token)
                                 // Update the message in-place with new content
                                 val updated = _messages.value.toMutableList()
@@ -242,19 +238,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Wrap prompt in ChatML format so the model responds conversationally */
     private fun buildChatPrompt(prompt: String, respondingAs: MessageRole): String {
-        val sb = StringBuilder()
-        sb.append("<|im_start|>system\nYou are a helpful assistant. Respond concisely.<|im_end|>\n")
-
-        if (respondingAs == MessageRole.CPU) {
-            // CPU is the assistant, prompt comes from user (or GPU acting as user)
-            sb.append("<|im_start|>user\n$prompt<|im_end|>\n")
-            sb.append("<|im_start|>assistant\n")
-        } else {
-            // GPU is the user, prompt comes from CPU (assistant's previous response)
-            sb.append("<|im_start|>assistant\n$prompt<|im_end|>\n")
-            sb.append("<|im_start|>user\n")
-        }
-        return sb.toString()
+        return "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
     }
 
     override fun onCleared() {
