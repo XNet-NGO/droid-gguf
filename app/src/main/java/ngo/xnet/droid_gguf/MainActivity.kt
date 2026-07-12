@@ -53,14 +53,12 @@ fun DroidGgufApp() {
                 onModelsSelected = { cpuPath, gpuPath ->
                     viewModel.loadCpuModel(cpuPath)
                     viewModel.loadGpuModel(gpuPath)
-                    navController.navigate("chat") {
-                        popUpTo("picker") { inclusive = true }
-                    }
+                    navController.navigate("chat")
                 }
             )
         }
         composable("chat") {
-            ChatScreen(viewModel = viewModel)
+            ChatScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
     }
 }
