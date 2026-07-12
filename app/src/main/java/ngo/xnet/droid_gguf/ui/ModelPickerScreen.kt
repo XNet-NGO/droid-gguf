@@ -165,7 +165,7 @@ fun ModelPickerScreen(
                     title = "CPU Model Settings",
                     config = cpuConfig,
                     showThreads = true,
-                    onConfigChanged = { viewModel.cpuConfig.value = it }
+                    onConfigChanged = { viewModel.cpuConfig.value = it; viewModel.saveState() }
                 )
 
                 // GPU Config Section
@@ -173,7 +173,7 @@ fun ModelPickerScreen(
                     title = "GPU Model Settings",
                     config = gpuConfig,
                     showThreads = false,
-                    onConfigChanged = { viewModel.gpuConfig.value = it }
+                    onConfigChanged = { viewModel.gpuConfig.value = it; viewModel.saveState() }
                 )
             }
 
