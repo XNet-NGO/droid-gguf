@@ -54,12 +54,18 @@ fun DroidGgufApp() {
             ModelPickerScreen(
                 viewModel = viewModel,
                 onModelsSelected = { _, _ ->
-                    navController.navigate("chat")
+                    navController.navigate("chat") {
+                        popUpTo("picker") { inclusive = true }
+                    }
                 }
             )
         }
         composable("chat") {
-            ChatScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            ChatScreen(viewModel = viewModel, onBack = {
+                navController.navigate("picker") {
+                    popUpTo("chat") { inclusive = true }
+                }
+            })
         }
     }
 }
