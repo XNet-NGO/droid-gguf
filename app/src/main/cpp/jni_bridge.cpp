@@ -152,6 +152,9 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGenerate(
 
     state->abort_flag.store(false);
 
+    // Clear KV cache — each turn gets fresh context
+    llama_memory_clear(llama_get_memory(state->ctx), true);
+
     // Look up callback methods
     jclass cbClass = env->GetObjectClass(callback);
     jmethodID onToken    = env->GetMethodID(cbClass, "onToken", "(Ljava/lang/String;)Z");

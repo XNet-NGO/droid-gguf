@@ -241,6 +241,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
     }
 
+
     override fun onCleared() {
         super.onCleared()
         stopLoop()
