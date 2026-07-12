@@ -20,6 +20,7 @@ set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP    ON  CACHE BOOL "" FORCE)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16+i8mm" CACHE STRING "" FORCE)
 set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
+set(GGML_FLASH_ATTN ON CACHE BOOL "" FORCE)
 
 # Disable all GPU/accelerator backends
 set(GGML_OPENCL    OFF CACHE BOOL "" FORCE)
@@ -29,7 +30,6 @@ set(GGML_CUDA      OFF CACHE BOOL "" FORCE)
 set(GGML_SYCL      OFF CACHE BOOL "" FORCE)
 set(GGML_RPC       OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
-set(GGML_FLASH_ATTN OFF CACHE BOOL "" FORCE)
 
 # Compiler optimization flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")

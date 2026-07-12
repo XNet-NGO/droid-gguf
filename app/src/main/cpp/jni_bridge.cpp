@@ -115,6 +115,9 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeLoadModel(
     ctx_params.n_threads = (nThreads > 0) ? nThreads : 4;
     ctx_params.n_threads_batch = ctx_params.n_threads;
     ctx_params.n_batch   = 512;
+    ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
+    ctx_params.type_k    = GGML_TYPE_Q8_0;  // Quantized KV cache: 50% less memory
+    ctx_params.type_v    = GGML_TYPE_Q8_0;
 
     state->ctx = llama_init_from_model(state->model, ctx_params);
     if (!state->ctx) {
