@@ -29,20 +29,15 @@ set(LLAMA_BUILD_COMMON   OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_APP      OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
 
-# GGML backend options
-set(GGML_OPENCL    ON  CACHE BOOL "" FORCE)
-set(GGML_OPENCL_EMBED_KERNELS ON CACHE BOOL "" FORCE)
-set(GGML_OPENMP    ON  CACHE BOOL "" FORCE)
+# GGML backend options — match aiope-inf's proven fast config
+set(GGML_OPENCL    OFF CACHE BOOL "" FORCE)
+set(GGML_OPENMP    OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
+set(GGML_FLASH_ATTN OFF CACHE BOOL "" FORCE)
+set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
 
 # CPU optimization: ARM NEON + dot product + fp16 + i8mm (proven stable)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16+i8mm" CACHE STRING "" FORCE)
-
-# Performance flags
-set(GGML_FLASH_ATTN OFF CACHE BOOL "" FORCE)
-
-# KleidiAI - disable for now (may conflict with this llama.cpp version)
-set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
 
 # Compiler optimization flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
