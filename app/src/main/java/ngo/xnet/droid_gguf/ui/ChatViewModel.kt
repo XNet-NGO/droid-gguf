@@ -216,7 +216,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     // Show thinking indicator
                                     val updated = _messages.value.toMutableList()
                                     if (msgIndex < updated.size && responseBuilder.isEmpty()) {
-                                        updated[msgIndex] = updated[msgIndex].copy(content = "💭 thinking...")
+                                        updated[msgIndex] = updated[msgIndex].copy(content = "\u200B") // zero-width space = thinking state
                                         _messages.value = updated
                                     }
                                     return !stopRequested
