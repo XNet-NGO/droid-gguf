@@ -170,11 +170,11 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGenerate(
     int n_prompt_max = prompt.size() + 128;
     std::vector<llama_token> tokens(n_prompt_max);
     int n_tokens = llama_tokenize(vocab, prompt.c_str(), prompt.size(),
-                                  tokens.data(), n_prompt_max, true, false);
+                                  tokens.data(), n_prompt_max, true, true);
     if (n_tokens < 0) {
         tokens.resize(-n_tokens);
         n_tokens = llama_tokenize(vocab, prompt.c_str(), prompt.size(),
-                                  tokens.data(), tokens.size(), true, false);
+                                  tokens.data(), tokens.size(), true, true);
     }
     if (n_tokens < 0) {
         env->CallVoidMethod(callback, onError, env->NewStringUTF("Tokenization failed"));
