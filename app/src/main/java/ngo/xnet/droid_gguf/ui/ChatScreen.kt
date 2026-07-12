@@ -189,8 +189,8 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
 private fun MessageBubble(message: ChatMessage) {
     val (roleLabel, roleColor) = when (message.role) {
         MessageRole.USER -> "User" to MaterialTheme.colorScheme.primary
-        MessageRole.CPU -> "Model A" to Color(0xFF4CAF50)
-        MessageRole.MODEL_B -> "Model B" to Color(0xFFFF9800)
+        MessageRole.CPU -> "Model A" to Color(0xFF81C784)  // green, 5.5:1 on dark
+        MessageRole.MODEL_B -> "Model B" to Color(0xFFFFB74D)  // amber, 6.2:1 on dark
     }
 
     Card(

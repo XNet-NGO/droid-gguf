@@ -46,12 +46,14 @@ fun DroidGgufApp() {
     val navController = rememberNavController()
     val viewModel: ChatViewModel = viewModel()
 
-    NavHost(navController = navController, startDestination = "picker") {
+    // If models are already persisted, start on chat screen
+    val startDest = if (viewModel.cpuModelPath != null || viewModel.modelBModelPath != null) "chat" else "picker"
+
+    NavHost(navController = navController, startDestination = startDest) {
         composable("picker") {
             ModelPickerScreen(
                 viewModel = viewModel,
                 onModelsSelected = { _, _ ->
-                    // Models already loaded from picker - just navigate
                     navController.navigate("chat")
                 }
             )
