@@ -165,6 +165,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     addMessage(ChatMessage(role = nextRole, content = ""))
                 }
 
+                var inThinking = false
                 val responseBuilder = StringBuilder()
                 val success = try {
                     engine.generate(
@@ -174,6 +175,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         topP = config.topP,
                         callback = object : LlamaEngine.StreamCallback {
                             override fun onToken(token: String): Boolean {
+                                // Filter out thinking blocks
+                                if (token.contains("<think>")) { inThinking = true; return !stopRequested }
+                                if (token.contains("</think>")) { inThinking = false; return !stopRequested }
+                                if (inThinking) return !stopRequested
+
                                 responseBuilder.append(token)
                                 // Update the message in-place with new content
                                 val updated = _messages.value.toMutableList()
@@ -238,7 +244,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Wrap prompt in ChatML format so the model responds conversationally */
     private fun buildChatPrompt(prompt: String, respondingAs: MessageRole): String {
-        return "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+        return "<|im_start|>system\n/no_think<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
     }
 
 
