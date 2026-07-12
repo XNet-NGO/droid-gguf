@@ -20,7 +20,7 @@ data class ModelConfig(
     val topK: Int = 40,
     val maxTokens: Int = 512,
     val contextSize: Int = 4096,
-    val nThreads: Int = 6,
+    val nThreads: Int = 8,
     val systemPrompt: String = "/no_think\nYou are a helpful assistant. Respond concisely.",
 )
 

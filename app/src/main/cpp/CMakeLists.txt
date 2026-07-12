@@ -35,15 +35,21 @@ set(GGML_OPENCL_EMBED_KERNELS ON CACHE BOOL "" FORCE)
 set(GGML_OPENMP    ON  CACHE BOOL "" FORCE)
 set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
 
-# CPU optimization: ARM NEON + dot product + fp16 + i8mm
-set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16+i8mm" CACHE STRING "" FORCE)
+# CPU optimization: ARM NEON + dot product + fp16 + i8mm + SVE2
+set(GGML_CPU_ARM_ARCH "armv9-a+dotprod+fp16+i8mm+sve2" CACHE STRING "" FORCE)
 
 # Performance flags
 set(GGML_FLASH_ATTN ON CACHE BOOL "" FORCE)
 
+# KleidiAI - ARM's optimized GEMM kernels (30-50% faster quantized matmul)
+set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
+
+# Memory-mapped model loading (faster startup, less RAM copy)
+set(LLAMA_MMAP ON CACHE BOOL "" FORCE)
+
 # Compiler optimization flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG -mcpu=cortex-x4")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG -mcpu=cortex-x4")
 
 # Disable backends we don't need
 set(GGML_VULKAN    OFF CACHE BOOL "" FORCE)
