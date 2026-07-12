@@ -155,14 +155,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     else -> break
                 }
 
-                // Apply chat template
-                val formattedPrompt = buildChatPrompt(currentPrompt, nextRole)
-
+                // Apply chat template and trim to fit context
                 val config = when (nextRole) {
                     MessageRole.CPU -> cpuConfig.value
                     MessageRole.GPU -> gpuConfig.value
                     else -> ModelConfig()
                 }
+                val formattedPrompt = buildChatPrompt(
+                    trimToContext(currentPrompt, config.contextSize),
+                    nextRole
+                )
 
                 // Add an empty message that we'll stream tokens into
                 val msgIndex = _messages.value.size
@@ -245,6 +247,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun clearMessages() {
         stopLoop()
         _messages.value = emptyList()
+    }
+
+    /** Trim prompt to fit within context window, keeping newest content.
+     *  Rough estimate: 1 token ≈ 4 chars. Reserve 25% for generation. */
+    private fun trimToContext(prompt: String, contextSize: Int): String {
+        val maxChars = (contextSize * 3) // ~75% of context for prompt (4 chars/token * 0.75)
+        return if (prompt.length > maxChars) {
+            prompt.takeLast(maxChars)
+        } else {
+            prompt
+        }
     }
 
     /** Wrap prompt in ChatML format so the model responds conversationally */
