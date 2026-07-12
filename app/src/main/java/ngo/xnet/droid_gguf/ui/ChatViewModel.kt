@@ -82,6 +82,9 @@ class ChatViewModel : ViewModel() {
                     else -> break
                 }
 
+                // Wrap in ChatML format so the model responds to the prompt
+                val formattedPrompt = buildChatPrompt(currentPrompt, nextRole)
+
                 val config = when (nextRole) {
                     MessageRole.CPU -> cpuConfig.value
                     MessageRole.GPU -> gpuConfig.value
@@ -97,7 +100,7 @@ class ChatViewModel : ViewModel() {
                 val responseBuilder = StringBuilder()
                 val success = try {
                     engine.generate(
-                        prompt = currentPrompt,
+                        prompt = formattedPrompt,
                         maxTokens = config.maxTokens,
                         temperature = config.temperature,
                         topP = config.topP,
@@ -158,6 +161,18 @@ class ChatViewModel : ViewModel() {
 
     private fun addMessage(message: ChatMessage) {
         _messages.value = _messages.value + message
+    }
+
+    /** Wrap prompt in ChatML format so the model responds conversationally */
+    private fun buildChatPrompt(prompt: String, respondingAs: MessageRole): String {
+        val sb = StringBuilder()
+        // System instruction
+        sb.append("<|im_start|>system\nYou are a helpful assistant. Respond concisely.<|im_end|>\n")
+        // The prompt as user message
+        sb.append("<|im_start|>user\n$prompt<|im_end|>\n")
+        // Start assistant turn
+        sb.append("<|im_start|>assistant\n")
+        return sb.toString()
     }
 
     override fun onCleared() {
