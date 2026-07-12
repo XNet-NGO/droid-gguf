@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -202,7 +203,9 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGenerate(
         return JNI_FALSE;
     }
 
-    // Generation loop
+    // Generation loop with timing
+    auto gen_start = std::chrono::steady_clock::now();
+    int tokens_generated = 0;
     int max = (maxTokens > 0) ? maxTokens : 512;
     for (int i = 0; i < max; i++) {
         if (state->abort_flag.load()) {
@@ -240,6 +243,8 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGenerate(
             break;
         }
 
+        tokens_generated++;
+
         // Prepare next batch (single token)
         llama_batch next = llama_batch_get_one(&new_token, 1);
         if (llama_decode(state->ctx, next) != 0) {
@@ -247,6 +252,18 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGenerate(
             return JNI_FALSE;
         }
     }
+
+    // Report metrics
+    auto gen_end = std::chrono::steady_clock::now();
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(gen_end - gen_start).count();
+    float tps = (elapsed_ms > 0) ? (tokens_generated * 1000.0f / elapsed_ms) : 0.0f;
+
+    jmethodID onMetrics = env->GetMethodID(cbClass, "onMetrics", "(FIJ)V");
+    if (onMetrics) {
+        env->CallVoidMethod(callback, onMetrics, tps, (jint)tokens_generated, (jlong)elapsed_ms);
+    }
+
+    LOGI("Generated %d tokens in %lld ms (%.1f tok/s)", tokens_generated, (long long)elapsed_ms, tps);
 
     env->CallVoidMethod(callback, onComplete);
     return JNI_TRUE;

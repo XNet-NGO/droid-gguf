@@ -173,6 +173,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 var inThinking = false
                 val responseBuilder = StringBuilder()
+                var measuredTps: Float? = null
                 val success = try {
                     engine.generate(
                         prompt = formattedPrompt,
@@ -195,6 +196,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 return !stopRequested
                             }
                             override fun onComplete() {}
+                            override fun onMetrics(tokensPerSec: Float, totalTokens: Int, elapsedMs: Long) {
+                                measuredTps = tokensPerSec
+                                // Update message with final metrics
+                                val updated = _messages.value.toMutableList()
+                                if (msgIndex < updated.size) {
+                                    updated[msgIndex] = updated[msgIndex].copy(tokensPerSec = tokensPerSec)
+                                    _messages.value = updated
+                                }
+                            }
                             override fun onError(error: String) {
                                 responseBuilder.append("\n[Error: $error]")
                             }

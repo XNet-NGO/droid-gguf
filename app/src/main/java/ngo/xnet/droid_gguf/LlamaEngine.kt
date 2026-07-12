@@ -161,6 +161,13 @@ class LlamaEngine : AutoCloseable {
         /** Called when generation completes normally or is stopped. */
         fun onComplete()
 
+        /** Called with generation metrics after completion.
+         * @param tokensPerSec Output tokens per second.
+         * @param totalTokens Total tokens generated.
+         * @param elapsedMs Total generation time in milliseconds.
+         */
+        fun onMetrics(tokensPerSec: Float, totalTokens: Int, elapsedMs: Long) {}
+
         /** Called on fatal error during generation. */
         fun onError(error: String)
     }
