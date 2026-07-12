@@ -115,11 +115,15 @@ class ChatViewModel : ViewModel() {
                         topP = config.topP,
                         callback = object : LlamaEngine.StreamCallback {
                             override fun onToken(token: String): Boolean {
+                                // Stop on end-of-turn tokens
+                                if (token.contains("<|im_end|>") || token.contains("<|endoftext|>") || token.contains("<|im_start|>")) {
+                                    return false
+                                }
                                 responseBuilder.append(token)
                                 // Update the message in-place with new content
                                 val updated = _messages.value.toMutableList()
                                 if (msgIndex < updated.size) {
-                                    updated[msgIndex] = updated[msgIndex].copy(content = responseBuilder.toString())
+                                    updated[msgIndex] = updated[msgIndex].copy(content = responseBuilder.toString().trim())
                                     _messages.value = updated
                                 }
                                 return !stopRequested
