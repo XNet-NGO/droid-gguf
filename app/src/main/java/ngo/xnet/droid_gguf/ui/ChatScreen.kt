@@ -230,19 +230,11 @@ private fun MessageBubble(message: ChatMessage) {
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
-            if (message.content == "\u200B") {
-                // Thinking state - show shimmer
-                Spacer(modifier = Modifier.height(4.dp))
-                ThinkingShimmer()
-                Spacer(modifier = Modifier.height(4.dp))
-                ThinkingShimmer(widthFraction = 0.5f)
-            } else {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            Text(
+                text = message.content,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }

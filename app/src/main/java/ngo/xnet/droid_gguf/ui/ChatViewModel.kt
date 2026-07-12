@@ -197,10 +197,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     addMessage(ChatMessage(role = nextRole, content = ""))
                 }
 
-                var inThinking = false
-                var hasStartedThinking = false
                 val responseBuilder = StringBuilder()
-                val thinkingBuilder = StringBuilder()
                 var measuredTps: Float? = null
                 val success = try {
                     engine.generate(
@@ -210,35 +207,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         topP = config.topP,
                         callback = object : LlamaEngine.StreamCallback {
                             override fun onToken(token: String): Boolean {
-                                // Filter out thinking blocks
-                                if (token.contains("<think>")) {
-                                    inThinking = true
-                                    hasStartedThinking = true
-                                    // Show thinking indicator
-                                    val updated = _messages.value.toMutableList()
-                                    if (msgIndex < updated.size && responseBuilder.isEmpty()) {
-                                        updated[msgIndex] = updated[msgIndex].copy(content = "\u200B") // zero-width space = thinking state
-                                        _messages.value = updated
-                                    }
-                                    return !stopRequested
-                                }
-                                if (token.contains("</think>")) {
-                                    inThinking = false
-                                    // Clear thinking indicator
-                                    if (responseBuilder.isEmpty()) {
-                                        val updated = _messages.value.toMutableList()
-                                        if (msgIndex < updated.size) {
-                                            updated[msgIndex] = updated[msgIndex].copy(content = "")
-                                            _messages.value = updated
-                                        }
-                                    }
-                                    return !stopRequested
-                                }
-                                if (inThinking) {
-                                    thinkingBuilder.append(token)
-                                    return !stopRequested
-                                }
-
                                 responseBuilder.append(token)
                                 val updated = _messages.value.toMutableList()
                                 if (msgIndex < updated.size) {
@@ -276,28 +244,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (stopRequested) break
 
                 val response = responseBuilder.toString().trim()
-                if (response.isEmpty()) {
-                    // No visible output. If there was thinking content, use it as the response
-                    val thinkContent = thinkingBuilder.toString().trim()
-                    if (thinkContent.isNotEmpty()) {
-                        val updated = _messages.value.toMutableList()
-                        if (msgIndex < updated.size) {
-                            updated[msgIndex] = updated[msgIndex].copy(content = thinkContent)
-                            _messages.value = updated
-                        }
-                        currentPrompt = thinkContent
-                    } else {
-                        // Truly empty - remove bubble and stop
-                        val updated = _messages.value.toMutableList()
-                        if (msgIndex < updated.size && updated[msgIndex].content.let { it.isEmpty() || it == "\u200B" }) {
-                            updated.removeAt(msgIndex)
-                            _messages.value = updated
-                        }
-                        break
-                    }
-                } else {
-                    currentPrompt = response
-                }
+                if (response.isEmpty()) break
+
+                currentPrompt = response
 
                 // Alternate between Model A and Model B
                 nextRole = when (nextRole) {
