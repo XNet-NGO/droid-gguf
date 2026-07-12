@@ -164,6 +164,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     else -> break
                 }
 
+                // Skip if this engine isn't loaded
+                if (!engine.isLoaded) {
+                    nextRole = when (nextRole) {
+                        MessageRole.CPU -> MessageRole.MODEL_B
+                        MessageRole.MODEL_B -> MessageRole.CPU
+                        else -> break
+                    }
+                    // If neither model is loaded, stop
+                    val otherEngine = when (nextRole) {
+                        MessageRole.CPU -> cpuEngine
+                        MessageRole.MODEL_B -> modelBEngine
+                        else -> break
+                    }
+                    if (!otherEngine.isLoaded) break
+                    continue
+                }
+
                 val config = when (nextRole) {
                     MessageRole.CPU -> cpuConfig.value
                     MessageRole.MODEL_B -> modelBConfig.value
@@ -232,8 +249,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (stopRequested) break
 
-                val response = responseBuilder.toString()
-                if (response.isEmpty()) break
+                val response = responseBuilder.toString().trim()
+                if (response.isEmpty()) {
+                    // All tokens were filtered (think blocks or invalid UTF-8)
+                    // Remove the empty bubble and continue with previous prompt
+                    val updated = _messages.value.toMutableList()
+                    if (msgIndex < updated.size) {
+                        updated.removeAt(msgIndex)
+                        _messages.value = updated
+                    }
+                    break
+                }
 
                 currentPrompt = response
 

@@ -75,8 +75,12 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
                     }
                 },
                 title = {
+                    val title = listOfNotNull(
+                        viewModel.cpuModelName.takeIf { it.isNotEmpty() },
+                        viewModel.modelBModelName.takeIf { it.isNotEmpty() }
+                    ).joinToString(" | ")
                     Text(
-                        text = "${viewModel.cpuModelName} | ${viewModel.modelBModelName}",
+                        text = title.ifEmpty { "droid-gguf" },
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 1
                     )
