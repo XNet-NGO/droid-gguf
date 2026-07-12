@@ -42,14 +42,14 @@ fun ModelPickerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var cpuState by remember { mutableStateOf(ModelLoadState.EMPTY) }
-    var gpuState by remember { mutableStateOf(ModelLoadState.EMPTY) }
-    var cpuModelPath by remember { mutableStateOf<String?>(null) }
-    var gpuModelPath by remember { mutableStateOf<String?>(null) }
-    var cpuModelName by remember { mutableStateOf<String?>(null) }
-    var gpuModelName by remember { mutableStateOf<String?>(null) }
-    var cpuModelSize by remember { mutableStateOf<String?>(null) }
-    var gpuModelSize by remember { mutableStateOf<String?>(null) }
+    var cpuState by remember { mutableStateOf(if (viewModel.cpuModelPath != null) ModelLoadState.READY else ModelLoadState.EMPTY) }
+    var gpuState by remember { mutableStateOf(if (viewModel.gpuModelPath != null) ModelLoadState.READY else ModelLoadState.EMPTY) }
+    var cpuModelPath by remember { mutableStateOf(viewModel.cpuModelPath) }
+    var gpuModelPath by remember { mutableStateOf(viewModel.gpuModelPath) }
+    var cpuModelName by remember { mutableStateOf(viewModel.cpuModelName.takeIf { it.isNotEmpty() }) }
+    var gpuModelName by remember { mutableStateOf(viewModel.gpuModelName.takeIf { it.isNotEmpty() }) }
+    var cpuModelSize by remember { mutableStateOf<String?>(viewModel.cpuModelPath?.let { formatFileSize(java.io.File(it).length()) }) }
+    var gpuModelSize by remember { mutableStateOf<String?>(viewModel.gpuModelPath?.let { formatFileSize(java.io.File(it).length()) }) }
 
     val cpuConfig by viewModel.cpuConfig.collectAsState()
     val gpuConfig by viewModel.gpuConfig.collectAsState()
