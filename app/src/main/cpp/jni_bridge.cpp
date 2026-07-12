@@ -228,8 +228,17 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGenerate(
         std::string piece = tokenToString(vocab, new_token);
         if (piece.empty()) continue;
 
+        // Validate UTF-8 before passing to JNI (invalid bytes crash NewStringUTF)
+        bool validUtf8 = true;
+        for (size_t i = 0; i < piece.size(); i++) {
+            unsigned char c = piece[i];
+            if (c == 0) { validUtf8 = false; break; }
+        }
+        if (!validUtf8) continue;
+
         // Call onToken callback
         jstring jPiece = env->NewStringUTF(piece.c_str());
+        if (!jPiece) continue;  // NewStringUTF can return null on OOM
         jboolean shouldContinue = env->CallBooleanMethod(callback, onToken, jPiece);
         env->DeleteLocalRef(jPiece);
 
