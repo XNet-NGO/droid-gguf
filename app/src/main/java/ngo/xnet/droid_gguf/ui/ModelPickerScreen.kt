@@ -1,45 +1,30 @@
 package ngo.xnet.droid_gguf.ui
 
-import android.os.Environment
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
-data class GgufFile(
-    val file: File,
-    val name: String,
-    val sizeLabel: String
-)
+enum class ModelLoadState { EMPTY, LOADING, READY }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,18 +32,71 @@ fun ModelPickerScreen(
     onModelsSelected: (cpuModelPath: String, gpuModelPath: String) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var cpuState by remember { mutableStateOf(ModelLoadState.EMPTY) }
+    var gpuState by remember { mutableStateOf(ModelLoadState.EMPTY) }
     var cpuModelPath by remember { mutableStateOf<String?>(null) }
     var gpuModelPath by remember { mutableStateOf<String?>(null) }
-    var selectingFor by remember { mutableStateOf<SelectingFor>(SelectingFor.CPU) }
+    var cpuModelName by remember { mutableStateOf<String?>(null) }
+    var gpuModelName by remember { mutableStateOf<String?>(null) }
+    var cpuModelSize by remember { mutableStateOf<String?>(null) }
+    var gpuModelSize by remember { mutableStateOf<String?>(null) }
 
-    val ggufFiles = remember {
-        findGgufFiles(context.filesDir)
+    fun importModel(uri: Uri, onDone: (path: String, name: String, size: String) -> Unit) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val filename = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && idx >= 0) cursor.getString(idx) else null
+                } ?: uri.lastPathSegment?.substringAfterLast("/") ?: "model.gguf"
+
+                val modelsDir = File(context.filesDir, "models")
+                modelsDir.mkdirs()
+                val dest = File(modelsDir, filename)
+
+                if (!dest.exists()) {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        dest.outputStream().use { output -> input.copyTo(output, 8192 * 1024) }
+                    }
+                }
+
+                val size = formatFileSize(dest.length())
+                withContext(Dispatchers.Main) {
+                    onDone(dest.absolutePath, filename.removeSuffix(".gguf"), size)
+                }
+            }
+        }
+    }
+
+    val cpuPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            cpuState = ModelLoadState.LOADING
+            importModel(it) { path, name, size ->
+                cpuModelPath = path
+                cpuModelName = name
+                cpuModelSize = size
+                cpuState = ModelLoadState.READY
+            }
+        }
+    }
+
+    val gpuPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            gpuState = ModelLoadState.LOADING
+            importModel(it) { path, name, size ->
+                gpuModelPath = path
+                gpuModelName = name
+                gpuModelSize = size
+                gpuState = ModelLoadState.READY
+            }
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Select Models") },
+                title = { Text("droid-gguf", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
@@ -69,202 +107,164 @@ fun ModelPickerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Selection status
-            SelectionStatus(
-                label = "CPU Model",
-                path = cpuModelPath,
-                isActive = selectingFor == SelectingFor.CPU,
-                onClick = { selectingFor = SelectingFor.CPU }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SelectionStatus(
-                label = "GPU Model",
-                path = gpuModelPath,
-                isActive = selectingFor == SelectingFor.GPU,
-                onClick = { selectingFor = SelectingFor.GPU }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             Text(
-                text = "Select for: ${selectingFor.name}",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                "Load a model for each inference path",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            ModelSlotCard(
+                label = "CPU",
+                subtitle = "ARM NEON • 8 threads",
+                state = cpuState,
+                modelName = cpuModelName,
+                modelSize = cpuModelSize,
+                onClick = { cpuPicker.launch(arrayOf("*/*")) }
+            )
 
-            // File list
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(ggufFiles) { gguf ->
-                    GgufFileItem(
-                        gguf = gguf,
-                        isSelected = when (selectingFor) {
-                            SelectingFor.CPU -> gguf.file.absolutePath == cpuModelPath
-                            SelectingFor.GPU -> gguf.file.absolutePath == gpuModelPath
-                        },
-                        onClick = {
-                            when (selectingFor) {
-                                SelectingFor.CPU -> {
-                                    cpuModelPath = gguf.file.absolutePath
-                                    // Auto-advance to GPU selection
-                                    if (gpuModelPath == null) selectingFor = SelectingFor.GPU
-                                }
-                                SelectingFor.GPU -> {
-                                    gpuModelPath = gguf.file.absolutePath
-                                }
-                            }
-                        }
-                    )
-                }
+            ModelSlotCard(
+                label = "GPU",
+                subtitle = "OpenCL • PowerVR",
+                state = gpuState,
+                modelName = gpuModelName,
+                modelSize = gpuModelSize,
+                onClick = { gpuPicker.launch(arrayOf("*/*")) }
+            )
 
-                if (ggufFiles.isEmpty()) {
-                    item {
-                        Text(
-                            text = "No .gguf files found.\nPlace models in /sdcard/Download/ or app storage.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.weight(1f))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Start button
             Button(
-                onClick = {
-                    onModelsSelected(cpuModelPath!!, gpuModelPath!!)
-                },
-                enabled = cpuModelPath != null && gpuModelPath != null,
+                onClick = { onModelsSelected(cpuModelPath!!, gpuModelPath!!) },
+                enabled = cpuState == ModelLoadState.READY && gpuState == ModelLoadState.READY,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Start Chat", fontWeight = FontWeight.Bold)
+                Text("Start Chat Loop", fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 @Composable
-private fun SelectionStatus(
+private fun ModelSlotCard(
     label: String,
-    path: String?,
-    isActive: Boolean,
+    subtitle: String,
+    state: ModelLoadState,
+    modelName: String?,
+    modelSize: String?,
     onClick: () -> Unit
 ) {
+    val containerColor = when (state) {
+        ModelLoadState.EMPTY -> MaterialTheme.colorScheme.surfaceVariant
+        ModelLoadState.LOADING -> MaterialTheme.colorScheme.surfaceVariant
+        ModelLoadState.READY -> MaterialTheme.colorScheme.primaryContainer
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isActive)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = RoundedCornerShape(8.dp)
+            .clickable(enabled = state != ModelLoadState.LOADING) { onClick() },
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(0.3f)
-            )
-            Text(
-                text = path?.substringAfterLast("/") ?: "Not selected",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (path != null) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(0.7f)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            when (state) {
+                ModelLoadState.EMPTY -> {
+                    Text(
+                        "Tap to select .gguf file",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                ModelLoadState.LOADING -> {
+                    ShimmerBlock()
+                    Spacer(modifier = Modifier.height(4.dp))
+                    ShimmerBlock(widthFraction = 0.4f)
+                }
+                ModelLoadState.READY -> {
+                    Text(
+                        modelName ?: "",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            modelSize ?: "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            "✓ Ready",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun GgufFileItem(
-    gguf: GgufFile,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
+private fun ShimmerBlock(widthFraction: Float = 0.7f) {
+    val shimmerColors = listOf(
+        Color.LightGray.copy(alpha = 0.3f),
+        Color.LightGray.copy(alpha = 0.6f),
+        Color.LightGray.copy(alpha = 0.3f),
+    )
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ), label = "shimmer_translate"
+    )
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset(translateAnim.value - 200f, 0f),
+        end = Offset(translateAnim.value, 0f)
+    )
+
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.secondaryContainer
-            else
-                MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = gguf.name,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = gguf.sizeLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-private enum class SelectingFor { CPU, GPU }
-
-private fun findGgufFiles(appFilesDir: File): List<GgufFile> {
-    val dirs = mutableListOf<File>()
-
-    // /sdcard/Download
-    val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    if (downloadDir.exists()) dirs.add(downloadDir)
-
-    // App internal storage
-    if (appFilesDir.exists()) dirs.add(appFilesDir)
-
-    return dirs.flatMap { dir ->
-        dir.listFiles { file -> file.extension == "gguf" }?.toList() ?: emptyList()
-    }.distinctBy { it.absolutePath }
-        .sortedBy { it.name }
-        .map { file ->
-            GgufFile(
-                file = file,
-                name = file.name,
-                sizeLabel = formatFileSize(file.length())
-            )
-        }
+            .fillMaxWidth(widthFraction)
+            .height(16.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(brush)
+    )
 }
 
 private fun formatFileSize(bytes: Long): String {
     return when {
         bytes >= 1_073_741_824 -> String.format("%.1f GB", bytes / 1_073_741_824.0)
-        bytes >= 1_048_576 -> String.format("%.1f MB", bytes / 1_048_576.0)
-        bytes >= 1024 -> String.format("%.1f KB", bytes / 1024.0)
+        bytes >= 1_048_576 -> String.format("%.0f MB", bytes / 1_048_576.0)
+        bytes >= 1024 -> String.format("%.0f KB", bytes / 1024.0)
         else -> "$bytes B"
     }
 }

@@ -12,6 +12,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ngo.xnet.droid_gguf.LlamaEngine
 
+data class ModelConfig(
+    val temperature: Float = 0.8f,
+    val topP: Float = 0.95f,
+    val topK: Int = 40,
+    val maxTokens: Int = 512,
+    val contextSize: Int = 4096,
+    val nThreads: Int = 4,
+)
+
 class ChatViewModel : ViewModel() {
 
     val cpuEngine = LlamaEngine()
@@ -28,6 +37,9 @@ class ChatViewModel : ViewModel() {
     var gpuModelName: String = ""
         private set
 
+    var cpuConfig = MutableStateFlow(ModelConfig())
+    var gpuConfig = MutableStateFlow(ModelConfig())
+
     @Volatile
     private var stopRequested = false
     private var loopJob: Job? = null
@@ -35,14 +47,14 @@ class ChatViewModel : ViewModel() {
     fun loadCpuModel(path: String) {
         cpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
         viewModelScope.launch(Dispatchers.IO) {
-            cpuEngine.loadModel(path, contextSize = 2048, nThreads = 4, useGpu = false)
+            cpuEngine.loadModel(path, contextSize = cpuConfig.value.contextSize, nThreads = cpuConfig.value.nThreads, useGpu = false)
         }
     }
 
     fun loadGpuModel(path: String) {
         gpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
         viewModelScope.launch(Dispatchers.IO) {
-            gpuEngine.loadModel(path, contextSize = 2048, nThreads = 4, useGpu = true)
+            gpuEngine.loadModel(path, contextSize = gpuConfig.value.contextSize, nThreads = gpuConfig.value.nThreads, useGpu = true)
         }
     }
 
@@ -70,36 +82,59 @@ class ChatViewModel : ViewModel() {
                     else -> break
                 }
 
+                val config = when (nextRole) {
+                    MessageRole.CPU -> cpuConfig.value
+                    MessageRole.GPU -> gpuConfig.value
+                    else -> ModelConfig()
+                }
+
+                // Add an empty message that we'll stream tokens into
+                val msgIndex = _messages.value.size
+                withContext(Dispatchers.Main) {
+                    addMessage(ChatMessage(role = nextRole, content = ""))
+                }
+
                 val responseBuilder = StringBuilder()
                 val success = try {
                     engine.generate(
                         prompt = currentPrompt,
-                        maxTokens = 512,
-                        temperature = 0.8f,
-                        topP = 0.95f,
+                        maxTokens = config.maxTokens,
+                        temperature = config.temperature,
+                        topP = config.topP,
                         callback = object : LlamaEngine.StreamCallback {
                             override fun onToken(token: String): Boolean {
                                 responseBuilder.append(token)
+                                // Update the message in-place with new content
+                                val updated = _messages.value.toMutableList()
+                                if (msgIndex < updated.size) {
+                                    updated[msgIndex] = updated[msgIndex].copy(content = responseBuilder.toString())
+                                    _messages.value = updated
+                                }
                                 return !stopRequested
                             }
                             override fun onComplete() {}
-                            override fun onError(error: String) {}
+                            override fun onError(error: String) {
+                                responseBuilder.append("\n[Error: $error]")
+                            }
                         }
                     )
                 } catch (e: Exception) {
-                    addMessage(ChatMessage(role = nextRole, content = "[Error: ${e.message}]"))
+                    withContext(Dispatchers.Main) {
+                        val updated = _messages.value.toMutableList()
+                        if (msgIndex < updated.size) {
+                            updated[msgIndex] = updated[msgIndex].copy(content = "[Error: ${e.message}]")
+                            _messages.value = updated
+                        }
+                    }
                     break
                 }
 
                 if (stopRequested) break
 
                 val response = responseBuilder.toString()
-                if (response.isNotEmpty()) {
-                    addMessage(ChatMessage(role = nextRole, content = response))
-                    currentPrompt = response
-                } else {
-                    break
-                }
+                if (response.isEmpty()) break
+
+                currentPrompt = response
 
                 // Alternate between CPU and GPU
                 nextRole = when (nextRole) {
