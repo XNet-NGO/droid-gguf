@@ -198,6 +198,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 var inThinking = false
+                var hasStartedThinking = false
                 val responseBuilder = StringBuilder()
                 var measuredTps: Float? = null
                 val success = try {
@@ -209,8 +210,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         callback = object : LlamaEngine.StreamCallback {
                             override fun onToken(token: String): Boolean {
                                 // Filter out thinking blocks
-                                if (token.contains("<think>")) { inThinking = true; return !stopRequested }
-                                if (token.contains("</think>")) { inThinking = false; return !stopRequested }
+                                if (token.contains("<think>")) {
+                                    inThinking = true
+                                    hasStartedThinking = true
+                                    // Show thinking indicator
+                                    val updated = _messages.value.toMutableList()
+                                    if (msgIndex < updated.size && responseBuilder.isEmpty()) {
+                                        updated[msgIndex] = updated[msgIndex].copy(content = "💭 thinking...")
+                                        _messages.value = updated
+                                    }
+                                    return !stopRequested
+                                }
+                                if (token.contains("</think>")) {
+                                    inThinking = false
+                                    // Clear thinking indicator
+                                    if (responseBuilder.isEmpty()) {
+                                        val updated = _messages.value.toMutableList()
+                                        if (msgIndex < updated.size) {
+                                            updated[msgIndex] = updated[msgIndex].copy(content = "")
+                                            _messages.value = updated
+                                        }
+                                    }
+                                    return !stopRequested
+                                }
                                 if (inThinking) return !stopRequested
 
                                 responseBuilder.append(token)
