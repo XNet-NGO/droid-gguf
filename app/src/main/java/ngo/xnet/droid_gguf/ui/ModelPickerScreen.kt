@@ -37,22 +37,22 @@ enum class ModelLoadState { EMPTY, LOADING, READY }
 @Composable
 fun ModelPickerScreen(
     viewModel: ChatViewModel,
-    onModelsSelected: (cpuModelPath: String, gpuModelPath: String) -> Unit
+    onModelsSelected: (cpuModelPath: String, modelBPath: String) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var cpuState by remember { mutableStateOf(if (viewModel.cpuModelPath != null) ModelLoadState.READY else ModelLoadState.EMPTY) }
-    var gpuState by remember { mutableStateOf(if (viewModel.gpuModelPath != null) ModelLoadState.READY else ModelLoadState.EMPTY) }
+    var modelBState by remember { mutableStateOf(if (viewModel.modelBModelPath != null) ModelLoadState.READY else ModelLoadState.EMPTY) }
     var cpuModelPath by remember { mutableStateOf(viewModel.cpuModelPath) }
-    var gpuModelPath by remember { mutableStateOf(viewModel.gpuModelPath) }
+    var modelBModelPath by remember { mutableStateOf(viewModel.modelBModelPath) }
     var cpuModelName by remember { mutableStateOf(viewModel.cpuModelName.takeIf { it.isNotEmpty() }) }
-    var gpuModelName by remember { mutableStateOf(viewModel.gpuModelName.takeIf { it.isNotEmpty() }) }
+    var modelBModelName by remember { mutableStateOf(viewModel.modelBModelName.takeIf { it.isNotEmpty() }) }
     var cpuModelSize by remember { mutableStateOf<String?>(viewModel.cpuModelPath?.let { formatFileSize(java.io.File(it).length()) }) }
-    var gpuModelSize by remember { mutableStateOf<String?>(viewModel.gpuModelPath?.let { formatFileSize(java.io.File(it).length()) }) }
+    var modelBModelSize by remember { mutableStateOf<String?>(viewModel.modelBModelPath?.let { formatFileSize(java.io.File(it).length()) }) }
 
     val cpuConfig by viewModel.cpuConfig.collectAsState()
-    val gpuConfig by viewModel.gpuConfig.collectAsState()
+    val modelBConfig by viewModel.modelBConfig.collectAsState()
 
     fun importModel(uri: Uri, onDone: (path: String, name: String, size: String) -> Unit) {
         scope.launch {
@@ -93,20 +93,20 @@ fun ModelPickerScreen(
         }
     }
 
-    val gpuPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val modelBPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
-            gpuState = ModelLoadState.LOADING
+            modelBState = ModelLoadState.LOADING
             importModel(it) { path, name, size ->
-                gpuModelPath = path
-                gpuModelName = name
-                gpuModelSize = size
-                viewModel.loadGpuModel(path)
-                gpuState = ModelLoadState.READY
+                modelBModelPath = path
+                modelBModelName = name
+                modelBModelSize = size
+                viewModel.loadModelB(path)
+                modelBState = ModelLoadState.READY
             }
         }
     }
 
-    val bothReady = cpuState == ModelLoadState.READY && gpuState == ModelLoadState.READY
+    val bothReady = cpuState == ModelLoadState.READY && modelBState == ModelLoadState.READY
 
     Scaffold(
         topBar = {
@@ -127,14 +127,14 @@ fun ModelPickerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                "Load a model for each inference path",
+                "Load a model for each inference slot",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             ModelSlotCard(
-                label = "CPU",
-                subtitle = "ARM NEON • 8 threads",
+                label = "Model A",
+                subtitle = "CPU • ARM NEON",
                 state = cpuState,
                 modelName = cpuModelName,
                 modelSize = cpuModelSize,
@@ -142,15 +142,15 @@ fun ModelPickerScreen(
             )
 
             ModelSlotCard(
-                label = "GPU",
-                subtitle = "OpenCL • PowerVR",
-                state = gpuState,
-                modelName = gpuModelName,
-                modelSize = gpuModelSize,
-                onClick = { gpuPicker.launch(arrayOf("*/*")) }
+                label = "Model B",
+                subtitle = "CPU • ARM NEON",
+                state = modelBState,
+                modelName = modelBModelName,
+                modelSize = modelBModelSize,
+                onClick = { modelBPicker.launch(arrayOf("*/*")) }
             )
 
-            // Config section - shown after both models are loaded
+            // Config section
             if (bothReady) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -160,27 +160,23 @@ fun ModelPickerScreen(
                     fontWeight = FontWeight.Bold
                 )
 
-                // CPU Config Section
                 ConfigSection(
-                    title = "CPU Model Settings",
+                    title = "Model A Settings",
                     config = cpuConfig,
-                    showThreads = true,
                     onConfigChanged = { viewModel.cpuConfig.value = it; viewModel.saveState() }
                 )
 
-                // GPU Config Section
                 ConfigSection(
-                    title = "GPU Model Settings",
-                    config = gpuConfig,
-                    showThreads = false,
-                    onConfigChanged = { viewModel.gpuConfig.value = it; viewModel.saveState() }
+                    title = "Model B Settings",
+                    config = modelBConfig,
+                    onConfigChanged = { viewModel.modelBConfig.value = it; viewModel.saveState() }
                 )
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = { onModelsSelected(cpuModelPath!!, gpuModelPath!!) },
+                onClick = { onModelsSelected(cpuModelPath!!, modelBModelPath!!) },
                 enabled = bothReady,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -197,7 +193,6 @@ fun ModelPickerScreen(
 private fun ConfigSection(
     title: String,
     config: ModelConfig,
-    showThreads: Boolean,
     onConfigChanged: (ModelConfig) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -210,7 +205,6 @@ private fun ConfigSection(
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header - clickable to expand/collapse
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -237,65 +231,56 @@ private fun ConfigSection(
                         .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Temperature slider (0.0 to 2.0, step 0.1)
                     LabeledSlider(
                         label = "Temperature",
                         value = config.temperature,
                         valueRange = 0f..2f,
-                        steps = 19, // (2.0 - 0.0) / 0.1 - 1 = 19 steps between
+                        steps = 19,
                         valueDisplay = { String.format("%.1f", it) },
                         onValueChange = { onConfigChanged(config.copy(temperature = roundToStep(it, 0.1f))) }
                     )
 
-                    // Top-P slider (0.0 to 1.0, step 0.05)
                     LabeledSlider(
                         label = "Top-P",
                         value = config.topP,
                         valueRange = 0f..1f,
-                        steps = 19, // (1.0 - 0.0) / 0.05 - 1 = 19 steps between
+                        steps = 19,
                         valueDisplay = { String.format("%.2f", it) },
                         onValueChange = { onConfigChanged(config.copy(topP = roundToStep(it, 0.05f))) }
                     )
 
-                    // Top-K slider (1 to 100, step 1)
                     LabeledSlider(
                         label = "Top-K",
                         value = config.topK.toFloat(),
                         valueRange = 1f..100f,
-                        steps = 98, // (100 - 1) / 1 - 1 = 98 steps between
+                        steps = 98,
                         valueDisplay = { it.roundToInt().toString() },
                         onValueChange = { onConfigChanged(config.copy(topK = it.roundToInt())) }
                     )
 
-                    // Max Tokens slider (64 to 2048, step 64)
                     LabeledSlider(
                         label = "Max Tokens",
                         value = config.maxTokens.toFloat(),
                         valueRange = 64f..2048f,
-                        steps = 30, // (2048 - 64) / 64 - 1 = 30 steps between
+                        steps = 30,
                         valueDisplay = { it.roundToInt().toString() },
                         onValueChange = { onConfigChanged(config.copy(maxTokens = roundToIntStep(it, 64))) }
                     )
 
-                    // Context Size dropdown (1024, 2048, 4096, 8192)
                     ContextSizeSelector(
                         currentSize = config.contextSize,
                         onSizeSelected = { onConfigChanged(config.copy(contextSize = it)) }
                     )
 
-                    // Threads slider (1 to 8, step 1) - CPU only
-                    if (showThreads) {
-                        LabeledSlider(
-                            label = "Threads",
-                            value = config.nThreads.toFloat(),
-                            valueRange = 1f..8f,
-                            steps = 6, // (8 - 1) / 1 - 1 = 6 steps between
-                            valueDisplay = { it.roundToInt().toString() },
-                            onValueChange = { onConfigChanged(config.copy(nThreads = it.roundToInt())) }
-                        )
-                    }
+                    LabeledSlider(
+                        label = "Threads",
+                        value = config.nThreads.toFloat(),
+                        valueRange = 1f..8f,
+                        steps = 6,
+                        valueDisplay = { it.roundToInt().toString() },
+                        onValueChange = { onConfigChanged(config.copy(nThreads = it.roundToInt())) }
+                    )
 
-                    // System Prompt
                     Text("System Prompt", style = MaterialTheme.typography.labelMedium)
                     OutlinedTextField(
                         value = config.systemPrompt,
@@ -326,10 +311,7 @@ private fun LabeledSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(label, style = MaterialTheme.typography.bodyMedium)
             Text(
                 valueDisplay(value),
                 style = MaterialTheme.typography.bodyMedium,
@@ -357,10 +339,7 @@ private fun ContextSizeSelector(
     var expanded by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            "Context Size",
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Text("Context Size", style = MaterialTheme.typography.bodyMedium)
         Spacer(modifier = Modifier.height(4.dp))
         ExposedDropdownMenuBox(
             expanded = expanded,

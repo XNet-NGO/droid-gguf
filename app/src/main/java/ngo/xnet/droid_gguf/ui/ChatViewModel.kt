@@ -29,7 +29,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("droid_gguf", Context.MODE_PRIVATE)
 
     val cpuEngine = LlamaEngine()
-    val gpuEngine = LlamaEngine()
+    val modelBEngine = LlamaEngine()
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -39,21 +39,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     var cpuModelName: String = ""
         private set
-    var gpuModelName: String = ""
+    var modelBModelName: String = ""
         private set
 
     var cpuModelPath: String? = null
         private set
-    var gpuModelPath: String? = null
+    var modelBModelPath: String? = null
         private set
 
     var cpuConfig = MutableStateFlow(ModelConfig())
-    var gpuConfig = MutableStateFlow(ModelConfig())
+    var modelBConfig = MutableStateFlow(ModelConfig())
 
     private val _cpuLoaded = MutableStateFlow(false)
     val cpuLoaded: StateFlow<Boolean> = _cpuLoaded.asStateFlow()
-    private val _gpuLoaded = MutableStateFlow(false)
-    val gpuLoaded: StateFlow<Boolean> = _gpuLoaded.asStateFlow()
+    private val _modelBLoaded = MutableStateFlow(false)
+    val modelBLoaded: StateFlow<Boolean> = _modelBLoaded.asStateFlow()
 
     @Volatile
     private var stopRequested = false
@@ -65,7 +65,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun restoreState() {
         val cpu = prefs.getString("cpu_model_path", null)
-        val gpu = prefs.getString("gpu_model_path", null)
+        val modelB = prefs.getString("gpu_model_path", null)
         cpuConfig.value = ModelConfig(
             temperature = prefs.getFloat("cpu_temp", 0.8f),
             topP = prefs.getFloat("cpu_topp", 0.95f),
@@ -75,7 +75,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             nThreads = prefs.getInt("cpu_threads", 6),
             systemPrompt = prefs.getString("cpu_system_prompt", "/no_think\nYou are a helpful assistant. Respond concisely.") ?: "",
         )
-        gpuConfig.value = ModelConfig(
+        modelBConfig.value = ModelConfig(
             temperature = prefs.getFloat("gpu_temp", 0.8f),
             topP = prefs.getFloat("gpu_topp", 0.95f),
             topK = prefs.getInt("gpu_topk", 40),
@@ -85,13 +85,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             systemPrompt = prefs.getString("gpu_system_prompt", "/no_think\nYou are a helpful assistant. Respond concisely.") ?: "",
         )
         if (cpu != null && java.io.File(cpu).exists()) loadCpuModel(cpu)
-        if (gpu != null && java.io.File(gpu).exists()) loadGpuModel(gpu)
+        if (modelB != null && java.io.File(modelB).exists()) loadModelB(modelB)
     }
 
     fun saveState() {
         prefs.edit()
             .putString("cpu_model_path", cpuModelPath)
-            .putString("gpu_model_path", gpuModelPath)
+            .putString("gpu_model_path", modelBModelPath)
             .putFloat("cpu_temp", cpuConfig.value.temperature)
             .putFloat("cpu_topp", cpuConfig.value.topP)
             .putInt("cpu_topk", cpuConfig.value.topK)
@@ -99,13 +99,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             .putInt("cpu_context", cpuConfig.value.contextSize)
             .putInt("cpu_threads", cpuConfig.value.nThreads)
             .putString("cpu_system_prompt", cpuConfig.value.systemPrompt)
-            .putFloat("gpu_temp", gpuConfig.value.temperature)
-            .putFloat("gpu_topp", gpuConfig.value.topP)
-            .putInt("gpu_topk", gpuConfig.value.topK)
-            .putInt("gpu_max_tokens", gpuConfig.value.maxTokens)
-            .putInt("gpu_context", gpuConfig.value.contextSize)
-            .putInt("gpu_threads", gpuConfig.value.nThreads)
-            .putString("gpu_system_prompt", gpuConfig.value.systemPrompt)
+            .putFloat("gpu_temp", modelBConfig.value.temperature)
+            .putFloat("gpu_topp", modelBConfig.value.topP)
+            .putInt("gpu_topk", modelBConfig.value.topK)
+            .putInt("gpu_max_tokens", modelBConfig.value.maxTokens)
+            .putInt("gpu_context", modelBConfig.value.contextSize)
+            .putInt("gpu_threads", modelBConfig.value.nThreads)
+            .putString("gpu_system_prompt", modelBConfig.value.systemPrompt)
             .apply()
     }
 
@@ -114,26 +114,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         cpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
         _cpuLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
-            val success = cpuEngine.loadModel(path, contextSize = cpuConfig.value.contextSize, nThreads = cpuConfig.value.nThreads, useGpu = false)
+            val success = cpuEngine.loadModel(path, contextSize = cpuConfig.value.contextSize, nThreads = cpuConfig.value.nThreads)
             _cpuLoaded.value = success
             saveState()
         }
     }
 
-    fun loadGpuModel(path: String) {
-        gpuModelPath = path
-        gpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
-        _gpuLoaded.value = false
+    fun loadModelB(path: String) {
+        modelBModelPath = path
+        modelBModelName = path.substringAfterLast("/").removeSuffix(".gguf")
+        _modelBLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
-            val success = gpuEngine.loadModel(path, contextSize = gpuConfig.value.contextSize, nThreads = gpuConfig.value.nThreads, useGpu = true)
-            _gpuLoaded.value = success
+            val success = modelBEngine.loadModel(path, contextSize = modelBConfig.value.contextSize, nThreads = modelBConfig.value.nThreads)
+            _modelBLoaded.value = success
             saveState()
         }
     }
 
     /**
      * Start the alternating generation loop:
-     * User prompt → CPU response → GPU response → CPU response → ... until stopped.
+     * User prompt → Model A response → Model B response → Model A → ... until stopped.
      */
     fun startLoop(userPrompt: String) {
         if (_isGenerating.value) return
@@ -151,14 +151,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             while (!stopRequested && isActive) {
                 val engine = when (nextRole) {
                     MessageRole.CPU -> cpuEngine
-                    MessageRole.GPU -> gpuEngine
+                    MessageRole.MODEL_B -> modelBEngine
                     else -> break
                 }
 
-                // Apply chat template and trim to fit context
                 val config = when (nextRole) {
                     MessageRole.CPU -> cpuConfig.value
-                    MessageRole.GPU -> gpuConfig.value
+                    MessageRole.MODEL_B -> modelBConfig.value
                     else -> ModelConfig()
                 }
                 val formattedPrompt = buildChatPrompt(
@@ -188,7 +187,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 if (inThinking) return !stopRequested
 
                                 responseBuilder.append(token)
-                                // Update the message in-place with new content
                                 val updated = _messages.value.toMutableList()
                                 if (msgIndex < updated.size) {
                                     updated[msgIndex] = updated[msgIndex].copy(content = responseBuilder.toString().trim())
@@ -220,10 +218,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 currentPrompt = response
 
-                // Alternate between CPU and GPU
+                // Alternate between Model A and Model B
                 nextRole = when (nextRole) {
-                    MessageRole.CPU -> MessageRole.GPU
-                    MessageRole.GPU -> MessageRole.CPU
+                    MessageRole.CPU -> MessageRole.MODEL_B
+                    MessageRole.MODEL_B -> MessageRole.CPU
                     else -> break
                 }
             }
@@ -237,7 +235,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun stopLoop() {
         stopRequested = true
         cpuEngine.abort()
-        gpuEngine.abort()
+        modelBEngine.abort()
     }
 
     private fun addMessage(message: ChatMessage) {
@@ -249,10 +247,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = emptyList()
     }
 
-    /** Trim prompt to fit within context window, keeping newest content.
-     *  Rough estimate: 1 token ≈ 4 chars. Reserve 25% for generation. */
+    /** Trim prompt to fit within context window, keeping newest content. */
     private fun trimToContext(prompt: String, contextSize: Int): String {
-        val maxChars = (contextSize * 3) // ~75% of context for prompt (4 chars/token * 0.75)
+        val maxChars = (contextSize * 3)
         return if (prompt.length > maxChars) {
             prompt.takeLast(maxChars)
         } else {
@@ -260,11 +257,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Wrap prompt in ChatML format so the model responds conversationally */
+    /** Wrap prompt in ChatML format */
     private fun buildChatPrompt(prompt: String, respondingAs: MessageRole): String {
         val config = when (respondingAs) {
             MessageRole.CPU -> cpuConfig.value
-            MessageRole.GPU -> gpuConfig.value
+            MessageRole.MODEL_B -> modelBConfig.value
             else -> cpuConfig.value
         }
         val sys = config.systemPrompt
@@ -275,12 +272,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-
     override fun onCleared() {
         super.onCleared()
         stopLoop()
         loopJob?.cancel()
         cpuEngine.close()
-        gpuEngine.close()
+        modelBEngine.close()
     }
 }

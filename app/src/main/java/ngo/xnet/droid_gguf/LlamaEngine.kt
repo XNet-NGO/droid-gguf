@@ -7,15 +7,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * JNI bridge to llama.cpp for GGUF model inference.
+ * JNI bridge to llama.cpp for GGUF model inference (CPU backend).
  *
- * Supports both CPU and GPU (OpenCL) backends. Multiple instances can coexist
- * (e.g. one CPU engine and one GPU engine simultaneously).
+ * Multiple instances can coexist for dual-model chat loops.
  *
  * Usage:
  * ```
  * val engine = LlamaEngine()
- * engine.loadModel("/path/to/model.gguf", contextSize = 2048, nThreads = 4, useGpu = false)
+ * engine.loadModel("/path/to/model.gguf", contextSize = 2048, nThreads = 6)
  * engine.generateStream("Hello", GenerateParams()).collect { token -> print(token) }
  * engine.unload()
  * engine.close()
@@ -45,12 +44,11 @@ class LlamaEngine : AutoCloseable {
      * @param path Absolute path to the .gguf model file.
      * @param contextSize Context window size (0 = model default).
      * @param nThreads Number of threads for inference (0 = auto).
-     * @param useGpu If true, offloads to OpenCL GPU backend.
      * @return true on success.
      */
-    fun loadModel(path: String, contextSize: Int = 2048, nThreads: Int = 4, useGpu: Boolean = false): Boolean {
+    fun loadModel(path: String, contextSize: Int = 2048, nThreads: Int = 6): Boolean {
         check(handle != 0L) { "Engine has been closed" }
-        return nativeLoadModel(handle, path, contextSize, nThreads, useGpu)
+        return nativeLoadModel(handle, path, contextSize, nThreads)
     }
 
     /**
@@ -173,7 +171,7 @@ class LlamaEngine : AutoCloseable {
 
     private external fun nativeCreate(): Long
     private external fun nativeDestroy(handle: Long)
-    private external fun nativeLoadModel(handle: Long, path: String, contextSize: Int, nThreads: Int, useGpu: Boolean): Boolean
+    private external fun nativeLoadModel(handle: Long, path: String, contextSize: Int, nThreads: Int): Boolean
     private external fun nativeGenerate(handle: Long, prompt: String, maxTokens: Int, temperature: Float, topP: Float, callback: StreamCallback): Boolean
     private external fun nativeUnload(handle: Long)
     private external fun nativeAbort(handle: Long)

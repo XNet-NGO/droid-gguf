@@ -76,7 +76,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
                 },
                 title = {
                     Text(
-                        text = "${viewModel.cpuModelName} | ${viewModel.gpuModelName}",
+                        text = "${viewModel.cpuModelName} | ${viewModel.modelBModelName}",
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 1
                     )
@@ -181,8 +181,8 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
 private fun MessageBubble(message: ChatMessage) {
     val (roleLabel, roleColor) = when (message.role) {
         MessageRole.USER -> "User" to MaterialTheme.colorScheme.primary
-        MessageRole.CPU -> "CPU" to Color(0xFF4CAF50)
-        MessageRole.GPU -> "GPU" to Color(0xFFFF9800)
+        MessageRole.CPU -> "Model A" to Color(0xFF4CAF50)
+        MessageRole.MODEL_B -> "Model B" to Color(0xFFFF9800)
     }
 
     Card(

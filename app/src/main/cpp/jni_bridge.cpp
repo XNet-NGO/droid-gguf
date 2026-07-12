@@ -18,7 +18,6 @@ struct EngineState {
     llama_model   *model   = nullptr;
     llama_context *ctx     = nullptr;
     llama_sampler *sampler = nullptr;
-    bool           use_gpu = false;
     std::atomic<bool> abort_flag{false};
     std::mutex    mtx; // protects load/unload
 };
@@ -82,7 +81,7 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeDestroy(JNIEnv *, jobject, jlong han
 extern "C" JNIEXPORT jboolean JNICALL
 Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeLoadModel(
         JNIEnv *env, jobject, jlong handle,
-        jstring jPath, jint contextSize, jint nThreads, jboolean useGpu) {
+        jstring jPath, jint contextSize, jint nThreads) {
 
     auto *state = getState(handle);
     if (!state) return JNI_FALSE;
@@ -93,21 +92,15 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeLoadModel(
     if (state->ctx)     { llama_free(state->ctx);             state->ctx     = nullptr; }
     if (state->model)   { llama_model_free(state->model);     state->model   = nullptr; }
 
-    state->use_gpu = (useGpu == JNI_TRUE);
     state->abort_flag.store(false);
 
     std::string path = jstringToStd(env, jPath);
 
-    // --- Model params ---
+    // --- Model params (CPU only) ---
     llama_model_params model_params = llama_model_default_params();
-    if (state->use_gpu) {
-        // Offload all layers to GPU
-        model_params.n_gpu_layers = -1; // all layers
-    } else {
-        model_params.n_gpu_layers = 0;
-    }
+    model_params.n_gpu_layers = 0;
 
-    LOGI("Loading model: %s (gpu=%d, ctx=%d, threads=%d)", path.c_str(), state->use_gpu, contextSize, nThreads);
+    LOGI("Loading model: %s (ctx=%d, threads=%d)", path.c_str(), contextSize, nThreads);
 
     state->model = llama_model_load_from_file(path.c_str(), model_params);
     if (!state->model) {
@@ -323,8 +316,7 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGetModelInfo(JNIEnv *env, jobject, j
     json += "\"context_length\":" + std::to_string(n_ctx_train) + ",";
     json += "\"embedding_size\":" + std::to_string(n_embd) + ",";
     json += "\"layers\":" + std::to_string(n_layer) + ",";
-    json += "\"vocab_size\":" + std::to_string(n_vocab) + ",";
-    json += "\"gpu\":" + std::string(state->use_gpu ? "true" : "false");
+    json += "\"vocab_size\":" + std::to_string(n_vocab);
     json += "}";
 
     return env->NewStringUTF(json.c_str());

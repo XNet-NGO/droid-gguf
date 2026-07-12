@@ -4,20 +4,7 @@ project(droid-gguf C CXX)
 set(LLAMA_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp)
 
 # =============================================================================
-# Help CMake find OpenCL on Android
-# =============================================================================
-
-# Point to our custom FindOpenCL module
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-
-# =============================================================================
-# Python3 — needed by GGML_OPENCL_EMBED_KERNELS to run embed_kernel.py
-# =============================================================================
-set(Python3_EXECUTABLE "/usr/bin/python3")
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
-
-# =============================================================================
-# llama.cpp build options: single static build with CPU + OpenCL backends
+# llama.cpp build options: CPU-only
 # =============================================================================
 
 # Disable building tools/tests/examples — we only need the library
@@ -29,32 +16,30 @@ set(LLAMA_BUILD_COMMON   OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_APP      OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
 
-# GGML backend options — match aiope-inf's proven fast config
-set(GGML_OPENCL    OFF CACHE BOOL "" FORCE)
+# CPU backend only
 set(GGML_OPENMP    ON  CACHE BOOL "" FORCE)
-set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
-set(GGML_FLASH_ATTN OFF CACHE BOOL "" FORCE)
-set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
-
-# CPU optimization: ARM NEON + dot product + fp16 + i8mm (proven stable)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16+i8mm" CACHE STRING "" FORCE)
 
-# Compiler optimization flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
-
-# Disable backends we don't need
+# Disable all GPU/accelerator backends
+set(GGML_OPENCL    OFF CACHE BOOL "" FORCE)
 set(GGML_VULKAN    OFF CACHE BOOL "" FORCE)
 set(GGML_METAL     OFF CACHE BOOL "" FORCE)
 set(GGML_CUDA      OFF CACHE BOOL "" FORCE)
 set(GGML_SYCL      OFF CACHE BOOL "" FORCE)
 set(GGML_RPC       OFF CACHE BOOL "" FORCE)
+set(GGML_NATIVE    OFF CACHE BOOL "" FORCE)
+set(GGML_FLASH_ATTN OFF CACHE BOOL "" FORCE)
+set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
 
-# Add llama.cpp as a subdirectory — builds ggml + llama as static libs
+# Compiler optimization flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -DNDEBUG")
+
+# Add llama.cpp as a subdirectory
 add_subdirectory(${LLAMA_CPP_DIR} llama.cpp)
 
 # =============================================================================
-# libdroid-gguf.so: single JNI shared library with CPU + OpenCL backends
+# libdroid-gguf.so: JNI shared library
 # =============================================================================
 
 add_library(droid-gguf SHARED jni_bridge.cpp)
@@ -64,7 +49,6 @@ target_include_directories(droid-gguf PRIVATE
     ${LLAMA_CPP_DIR}/ggml/include
 )
 
-# Link against the llama static library (which transitively links ggml backends)
 target_link_libraries(droid-gguf PRIVATE
     llama
     log
