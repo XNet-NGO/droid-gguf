@@ -22,7 +22,7 @@ data class ModelConfig(
     val maxTokens: Int = 512,
     val contextSize: Int = 4096,
     val nThreads: Int = 6,
-    val systemPrompt: String = "/no_think\nYou are a helpful assistant. Respond concisely.",
+    val systemPrompt: String = "You are a helpful assistant. Respond concisely.",
 )
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -74,7 +74,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             maxTokens = prefs.getInt("cpu_max_tokens", 512),
             contextSize = prefs.getInt("cpu_context", 4096),
             nThreads = prefs.getInt("cpu_threads", 6),
-            systemPrompt = prefs.getString("cpu_system_prompt", "/no_think\nYou are a helpful assistant. Respond concisely.") ?: "",
+            systemPrompt = prefs.getString("cpu_system_prompt", "You are a helpful assistant. Respond concisely.") ?: "",
         )
         modelBConfig.value = ModelConfig(
             temperature = prefs.getFloat("gpu_temp", 0.8f),
@@ -83,7 +83,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             maxTokens = prefs.getInt("gpu_max_tokens", 512),
             contextSize = prefs.getInt("gpu_context", 4096),
             nThreads = prefs.getInt("gpu_threads", 6),
-            systemPrompt = prefs.getString("gpu_system_prompt", "/no_think\nYou are a helpful assistant. Respond concisely.") ?: "",
+            systemPrompt = prefs.getString("gpu_system_prompt", "You are a helpful assistant. Respond concisely.") ?: "",
         )
         if (cpu != null && java.io.File(cpu).exists()) loadCpuModel(cpu)
         if (modelB != null && java.io.File(modelB).exists()) loadModelB(modelB)
@@ -200,6 +200,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 var inThinking = false
                 var hasStartedThinking = false
                 val responseBuilder = StringBuilder()
+                val thinkingBuilder = StringBuilder()
                 var measuredTps: Float? = null
                 val success = try {
                     engine.generate(
@@ -233,7 +234,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     }
                                     return !stopRequested
                                 }
-                                if (inThinking) return !stopRequested
+                                if (inThinking) {
+                                    thinkingBuilder.append(token)
+                                    return !stopRequested
+                                }
 
                                 responseBuilder.append(token)
                                 val updated = _messages.value.toMutableList()
@@ -273,17 +277,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 val response = responseBuilder.toString().trim()
                 if (response.isEmpty()) {
-                    // All tokens were filtered (think blocks or invalid UTF-8)
-                    // Remove the empty bubble and continue with previous prompt
-                    val updated = _messages.value.toMutableList()
-                    if (msgIndex < updated.size) {
-                        updated.removeAt(msgIndex)
-                        _messages.value = updated
+                    // No visible output. If there was thinking content, use it as the response
+                    val thinkContent = thinkingBuilder.toString().trim()
+                    if (thinkContent.isNotEmpty()) {
+                        val updated = _messages.value.toMutableList()
+                        if (msgIndex < updated.size) {
+                            updated[msgIndex] = updated[msgIndex].copy(content = thinkContent)
+                            _messages.value = updated
+                        }
+                        currentPrompt = thinkContent
+                    } else {
+                        // Truly empty - remove bubble and stop
+                        val updated = _messages.value.toMutableList()
+                        if (msgIndex < updated.size && updated[msgIndex].content.let { it.isEmpty() || it == "\u200B" }) {
+                            updated.removeAt(msgIndex)
+                            _messages.value = updated
+                        }
+                        break
                     }
-                    break
+                } else {
+                    currentPrompt = response
                 }
-
-                currentPrompt = response
 
                 // Alternate between Model A and Model B
                 nextRole = when (nextRole) {
