@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -114,6 +115,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         cpuModelName = path.substringAfterLast("/").removeSuffix(".gguf")
         _cpuLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
+            // Stop any running generation first
+            cpuEngine.abort()
+            delay(100) // Let generation thread exit
+            cpuEngine.unload()
             val success = cpuEngine.loadModel(path, contextSize = cpuConfig.value.contextSize, nThreads = cpuConfig.value.nThreads)
             _cpuLoaded.value = success
             saveState()
@@ -125,6 +130,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         modelBModelName = path.substringAfterLast("/").removeSuffix(".gguf")
         _modelBLoaded.value = false
         viewModelScope.launch(Dispatchers.IO) {
+            // Stop any running generation first
+            modelBEngine.abort()
+            delay(100) // Let generation thread exit
+            modelBEngine.unload()
             val success = modelBEngine.loadModel(path, contextSize = modelBConfig.value.contextSize, nThreads = modelBConfig.value.nThreads)
             _modelBLoaded.value = success
             saveState()

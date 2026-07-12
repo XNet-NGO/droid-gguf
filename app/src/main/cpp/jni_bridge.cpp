@@ -224,17 +224,43 @@ Java_ngo_xnet_droid_1gguf_LlamaEngine_nativeGenerate(
         std::string piece = tokenToString(vocab, new_token);
         if (piece.empty()) continue;
 
-        // Validate UTF-8 before passing to JNI (invalid bytes crash NewStringUTF)
+        // Validate Modified UTF-8 for JNI NewStringUTF.
+        // JNI uses Modified UTF-8: no null bytes, no 4-byte sequences (surrogates must be CESU-8).
+        // If invalid, replace with U+FFFD or skip.
         bool validUtf8 = true;
-        for (size_t i = 0; i < piece.size(); i++) {
-            unsigned char c = piece[i];
+        const unsigned char *p = (const unsigned char *)piece.data();
+        const unsigned char *end = p + piece.size();
+        while (p < end) {
+            unsigned char c = *p;
             if (c == 0) { validUtf8 = false; break; }
+            if (c < 0x80) { p++; continue; }
+            int len;
+            if      ((c & 0xE0) == 0xC0) len = 2;
+            else if ((c & 0xF0) == 0xE0) len = 3;
+            else if ((c & 0xF8) == 0xF0) len = 4; // 4-byte not valid in Modified UTF-8
+            else { validUtf8 = false; break; }
+            if (len == 4) { validUtf8 = false; break; } // JNI can't handle 4-byte UTF-8
+            if (p + len > end) { validUtf8 = false; break; }
+            for (int j = 1; j < len; j++) {
+                if ((p[j] & 0xC0) != 0x80) { validUtf8 = false; break; }
+            }
+            if (!validUtf8) break;
+            // Check for surrogates (0xD800-0xDFFF) in 3-byte sequences
+            if (len == 3) {
+                uint32_t cp = ((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+                if (cp >= 0xD800 && cp <= 0xDFFF) { validUtf8 = false; break; }
+            }
+            p += len;
         }
         if (!validUtf8) continue;
 
         // Call onToken callback
         jstring jPiece = env->NewStringUTF(piece.c_str());
-        if (!jPiece) continue;  // NewStringUTF can return null on OOM
+        if (!jPiece) {
+            // Clear any pending exception from NewStringUTF failure
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            continue;
+        }
         jboolean shouldContinue = env->CallBooleanMethod(callback, onToken, jPiece);
         env->DeleteLocalRef(jPiece);
 
