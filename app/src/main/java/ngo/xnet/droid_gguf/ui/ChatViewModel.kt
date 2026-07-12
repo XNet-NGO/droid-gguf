@@ -166,12 +166,17 @@ class ChatViewModel : ViewModel() {
     /** Wrap prompt in ChatML format so the model responds conversationally */
     private fun buildChatPrompt(prompt: String, respondingAs: MessageRole): String {
         val sb = StringBuilder()
-        // System instruction
         sb.append("<|im_start|>system\nYou are a helpful assistant. Respond concisely.<|im_end|>\n")
-        // The prompt as user message
-        sb.append("<|im_start|>user\n$prompt<|im_end|>\n")
-        // Start assistant turn
-        sb.append("<|im_start|>assistant\n")
+
+        if (respondingAs == MessageRole.CPU) {
+            // CPU is the assistant, prompt comes from user (or GPU acting as user)
+            sb.append("<|im_start|>user\n$prompt<|im_end|>\n")
+            sb.append("<|im_start|>assistant\n")
+        } else {
+            // GPU is the user, prompt comes from CPU (assistant's previous response)
+            sb.append("<|im_start|>assistant\n$prompt<|im_end|>\n")
+            sb.append("<|im_start|>user\n")
+        }
         return sb.toString()
     }
 
